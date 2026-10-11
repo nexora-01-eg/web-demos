@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الساعة الناطقة | بصوت ناعم</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Segoe UI',Tahoma,Arial,sans-serif;
+    background:linear-gradient(135deg,#1a0b2e,#3b0f4f,#6b1d5e);
+    color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .card{
+    background:rgba(255,255,255,.08);backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,.15);border-radius:28px;
+    padding:40px 32px;max-width:520px;width:100%;text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.4);
+  }
+  h1{font-size:28px;margin-bottom:6px}
+  .sub{opacity:.75;font-size:15px;margin-bottom:24px}
+  .clock{font-size:84px;font-weight:800;letter-spacing:2px;line-height:1;margin:10px 0;font-variant-numeric:tabular-nums;text-shadow:0 4px 30px rgba(255,150,220,.4)}
+  .date{opacity:.8;font-size:17px;margin-bottom:24px}
+  .status{
+    display:inline-block;padding:8px 18px;border-radius:100px;font-size:14px;margin-bottom:20px;
+    background:rgba(255,80,80,.2);border:1px solid rgba(255,80,80,.4);
+  }
+  .status.on{background:rgba(80,255,170,.15);border-color:rgba(80,255,170,.4)}
+  .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+  button,select{
+    font-family:inherit;font-size:16px;border-radius:14px;padding:12px 22px;border:none;cursor:pointer;
+  }
+  button.primary{background:linear-gradient(135deg,#ff7eb3,#ff4e8a);color:#fff;font-weight:700;box-shadow:0 6px 24px rgba(255,78,138,.4)}
+  button.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
+  button:disabled{opacity:.5;cursor:default}
+  select{background:rgba(0,0,0,.35);color:#fff;border:1px solid rgba(255,255,255,.25);max-width:100%}
+  option{color:#000}
+  .controls{background:rgba(0,0,0,.25);border-radius:18px;padding:18px;margin-top:18px;text-align:right}
+  .controls label{display:block;font-size:14px;opacity:.85;margin:12px 0 6px}
+  input[type=range]{width:100%;accent-color:#ff7eb3}
+  .log{margin-top:16px;font-size:13px;opacity:.7;min-height:20px}
+  .hint{margin-top:14px;font-size:13px;opacity:.65;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🕰️ الساعة الناطقة</h1>
+  <div class="sub">Soft female voice — announces every hour in English</div>
+  <div class="clock" id="clock">--:--:--</div>
+  <div class="date" id="date">...</div>
+  <div><span class="status" id="status">🔴 الساعة الناطقة واقفة</span></div>
+
+  <div class="row">
+    <button class="primary" id="startBtn">▶ تشغيل الساعة الناطقة</button>
+    <button class="ghost" id="testBtn">🔊 جرّبي الصوت</button>
+  </div>
+
+  <div class="controls">
+    <label>🎙️ اختاري الصوت (ست):</label>
+    <select id="voiceSelect"><option>جاري تحميل الأصوات...</option></select>
+
+    <label>⏱️ التنبيه كل:</label>
+    <select id="intervalSelect">
+      <option value="60" selected>كل ساعة (راس الساعة)</option>
+      <option value="30">كل نصف ساعة</option>
+      <option value="15">كل ربع ساعة</option>
+      <option value="1">كل دقيقة (للتجربة)</option>
+    </select>
+
+    <label>🐢 سرعة الكلام: <span id="rateVal">0.9</span></label>
+    <input type="range" id="rate" min="0.5" max="1.3" step="0.05" value="0.9">
+
+    <label>🎵 نعومة الصوت (حدة): <span id="pitchVal">1.2</span></label>
+    <input type="range" id="pitch" min="0.8" max="1.6" step="0.05" value="1.2">
+  </div>
+
+  <div class="log" id="log"></div>
+  <div class="hint">💡 لازم تدوسي "تشغيل" مرة واحدة عشان المتصفح يسمح بالصوت.<br>سيبي الصفحة مفتوحة واللاب شغال، وهي هتنطق لوحدها كل ساعة:<br>"It's three o'clock PM"</div>
+</div>
+
+<script>
+const clockEl = document.getElementById('clock');
+const dateEl = document.getElementById('date');
+const statusEl = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
+const testBtn = document.getElementById('testBtn');
+const voiceSelect = document.getElementById('voiceSelect');
+const intervalSelect = document.getElementById('intervalSelect');
+const rateInput = document.getElementById('rate');
+const pitchInput = document.getElementById('pitch');
+const logEl = document.getElementById('log');
+
+let enabled = false;
+let voices = [];
+let lastSpokenKey = '';
+
+const hourWordsEn = {
+  1:"one",2:"two",3:"three",4:"four",5:"five",6:"six",
+  7:"seven",8:"eight",9:"nine",10:"ten",11:"eleven",12:"twelve"
+};
+
+function timeToSpeech(d){
+  const h = d.getHours(), m = d.getMinutes();
+  let h12 = h % 12; if(h12===0) h12 = 12;
+  const period = h < 12 ? 'AM' : 'PM';
+  if(m===0) return `It's ${hourWordsEn[h12]} o'clock ${period}`;
+  if(m===15) return `It's quarter past ${hourWordsEn[h12]} ${period}`;
+  if(m===30) return `It's half past ${hourWordsEn[h12]} ${period}`;
+  if(m===45){
+    let next = h12===12?1:h12+1;
+    return `It's quarter to ${hourWordsEn[next]} ${period}`;
+  }
+  return `It's ${hourWordsEn[h12]} ${m} ${period}`;
+}
+
+// ===== الأصوات =====
+function loadVoices(){
+  voices = speechSynthesis.getVoices() || [];
+  const en = voices.filter(v=>v.lang && v.lang.toLowerCase().startsWith('en'));
+  const list = en.length? en : voices;
+  voiceSelect.innerHTML = '';
+  // رتب: أصوات ست الأول
+  const femaleHints = ['female','woman','zira','samantha','google us english','google uk english female','aria','jenny','michelle','emma','olivia','ava','sophia','linda','karen','tessa','susan','heather','amy','joanna','kendra','kimberly','salli','ruth','stephanie','lily','hoda'];
+  list.sort((a,b)=>{
+    const an = (a.name+' '+a.lang).toLowerCase();
+    const bn = (b.name+' '+b.lang).toLowerCase();
+    const as = femaleHints.some(h=>an.includes(h))?0:1;
+    const bs = femaleHints.some(h=>bn.includes(h))?0:1;
+    return as-bs;
+  });
+  list.forEach((v,i)=>{
+    const o = document.createElement('option');
+    o.value = voices.indexOf(v);
+    o.textContent = `${v.name} — ${v.lang}`;
+    voiceSelect.appendChild(o);
+  });
+  if(list.length) voiceSelect.value = voices.indexOf(list[0]);
+  log(`تم تحميل ${voices.length} صوت (${en.length} إنجليزي)`);
+}
+if('speechSynthesis' in window){
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+} else {
+  alert('المتصفح ده لا يدعم النطق. استخدمي Chrome أو Edge');
+}
+
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  const idx = parseInt(voiceSelect.value);
+  if(voices[idx]){ u.voice = voices[idx]; u.lang = voices[idx].lang; }
+  u.rate = parseFloat(rateInput.value);   // 0.9 = هادي وناعم
+  u.pitch = parseFloat(pitchInput.value); // 1.2 = صوت ست ناعم
+  u.volume = 1;
+  speechSynthesis.speak(u);
+  log('🔊 ' + text);
+}
+
+function log(t){
+  const time = new Date().toLocaleTimeString('ar-EG');
+  logEl.textContent = `${time} — ${t}`;
+}
+
+// ===== الساعة =====
+function tick(){
+  const now = new Date();
+  clockEl.textContent = now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  dateEl.textContent = now.toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  if(!enabled) return;
+  const mode = parseInt(intervalSelect.value);
+  const key = `${now.getHours()}:${now.getMinutes()}`;
+  let should = false;
+  if(mode===60) should = now.getMinutes()===0 && now.getSeconds()===0;
+  else if(mode===30) should = (now.getMinutes()===0||now.getMinutes()===30) && now.getSeconds()===0;
+  else if(mode===15) should = (now.getMinutes()%15===0) && now.getSeconds()===0;
+  else if(mode===1) should = now.getSeconds()===0;
+  if(should && key!==lastSpokenKey){
+    lastSpokenKey = key;
+    speak(timeToSpeech(now));
+  }
+}
+setInterval(tick, 1000); tick();
+
+startBtn.onclick = async ()=>{
+  enabled = !enabled;
+  if(enabled){
+    // فك حظر الصوت + إحماء الصوت الست
+    speak("The talking clock is on. I will tell you the time every hour.");
+    statusEl.textContent = '🟢 الساعة الناطقة شغالة';
+    statusEl.classList.add('on');
+    startBtn.textContent = '⏸ إيقاف الساعة الناطقة';
+    // منع الشاشة من النوم لو متاح
+    try{ if('wakeLock' in navigator){ await navigator.wakeLock.request('screen'); } }catch(e){}
+  } else {
+    speechSynthesis.cancel();
+    statusEl.textContent = '🔴 الساعة الناطقة واقفة';
+    statusEl.classList.remove('on');
+    startBtn.textContent = '▶ تشغيل الساعة الناطقة';
+  }
+};
+
+testBtn.onclick = ()=>{
+  const now = new Date();
+  speak(timeToSpeech(now));
+};
+
+rateInput.oninput = ()=> document.getElementById('rateVal').textContent = rateInput.value;
+pitchInput.oninput = ()=> document.getElementById('pitchVal').textContent = pitchInput.value;
+</script>
+</body>
+</html>

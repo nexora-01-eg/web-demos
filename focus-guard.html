@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مانع التشتيت | وضع التركيز</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:linear-gradient(135deg,#0a1a2f,#0f3b2e,#123);color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:rgba(255,255,255,.07);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.15);border-radius:28px;padding:36px 30px;max-width:560px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+h1{font-size:26px;margin-bottom:6px}
+.sub{opacity:.7;font-size:14px;margin-bottom:20px}
+.timer{font-size:90px;font-weight:800;line-height:1;margin:10px 0;font-variant-numeric:tabular-nums;text-shadow:0 4px 30px rgba(80,255,170,.35)}
+.task{font-size:20px;font-weight:700;color:#7dffc4;margin-bottom:8px;min-height:28px}
+.quote{opacity:.75;font-size:15px;min-height:44px;margin-bottom:14px;line-height:1.7}
+.badges{display:flex;gap:10px;justify-content:center;margin:12px 0;flex-wrap:wrap}
+.badge{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:100px;padding:6px 16px;font-size:13px}
+.badge.warn{background:rgba(255,80,80,.2);border-color:rgba(255,80,80,.5)}
+.row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:14px 0}
+button,select,input{font-family:inherit;font-size:16px;border-radius:14px;padding:12px 20px;border:none}
+button{cursor:pointer;font-weight:700}
+button.primary{background:linear-gradient(135deg,#34d399,#10b981);color:#04281c;box-shadow:0 6px 24px rgba(52,211,153,.4)}
+button.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
+button.danger{background:rgba(255,80,80,.2);color:#fff;border:1px solid rgba(255,80,80,.5)}
+select,input{background:rgba(0,0,0,.35);color:#fff;border:1px solid rgba(255,255,255,.25)}
+select option{color:#000}
+.setup{background:rgba(0,0,0,.25);border-radius:18px;padding:18px;margin-top:10px;text-align:right}
+.setup label{display:block;font-size:14px;opacity:.85;margin:10px 0 6px}
+.setup input,.setup select{width:100%}
+.log{margin-top:12px;font-size:13px;opacity:.7;min-height:20px}
+.flash{animation:flash .6s ease 3}
+@keyframes flash{0%,100%{background:linear-gradient(135deg,#0a1a2f,#0f3b2e,#123)}50%{background:linear-gradient(135deg,#5f1010,#7f1d1d,#991b1b)}}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+<h1>🎯 وضع التركيز العميق</h1>
+<div class="sub">ملء الشاشة + تنبيه صوتي لو اتشتت</div>
+<div class="task" id="taskName">—</div>
+<div class="timer" id="timer">25:00</div>
+<div class="quote" id="quote">جاهز تركز؟ اكتب مهمتك ودوس ابدأ.</div>
+<div class="badges">
+<span class="badge" id="distractBadge">🚫 تشتيت: 0</span>
+<span class="badge" id="scoreBadge">⭐ تركيز: 100%</span>
+</div>
+<div class="setup" id="setup">
+<label>📌 مهمتك إيه؟</label>
+<input id="taskInput" placeholder="مثال: مذاكرة / شغل / تصميم...">
+<label>⏱️ مدة الجلسة:</label>
+<select id="durSelect">
+<option value="15">15 دقيقة (تسخين)</option>
+<option value="25" selected>25 دقيقة (بومودورو)</option>
+<option value="50">50 دقيقة (تركيز عميق)</option>
+<option value="90">90 دقيقة (وحش 🔥)</option>
+</select>
+<label>🔊 لغة التنبيه الصوتي:</label>
+<select id="langSelect">
+<option value="ar-EG">عربي — بصوت ست</option>
+<option value="en-US" selected>English — soft female</option>
+</select>
+</div>
+<div class="row">
+<button class="primary" id="startBtn">▶ ابدأ التركيز + ملء الشاشة</button>
+<button class="ghost" id="fsBtn">⛶ ملء الشاشة</button>
+</div>
+<div class="row">
+<button class="danger" id="exitBtn" style="display:none">⏹ إنهاء الجلسة</button>
+</div>
+<div class="log" id="log"></div>
+</div>
+<script>
+const timerEl=document.getElementById('timer'),taskName=document.getElementById('taskName'),
+quoteEl=document.getElementById('quote'),startBtn=document.getElementById('startBtn'),
+exitBtn=document.getElementById('exitBtn'),fsBtn=document.getElementById('fsBtn'),
+logEl=document.getElementById('log'),card=document.getElementById('card'),
+distractBadge=document.getElementById('distractBadge'),scoreBadge=document.getElementById('scoreBadge');
+
+let total=25*60,left=total,tickId=null,running=false,distractions=0,lastWarn=0;
+const quotes=[
+"ركز على حاجة واحدة بس.. الباقي يستنى 💪",
+"كل دقيقة تركيز بتقربك من هدفك 🎯",
+"الموبايل مش هيطير.. خلص اللي وراك 📵",
+"النجاح = تركيز + استمرارية 🔥",
+"انت أقوى من التشتت.. كمل 👊",
+"Deep work makes you unstoppable 🚀"
+];
+let qi=0;
+setInterval(()=>{if(running){quoteEl.textContent=quotes[qi++%quotes.length];}},15000);
+
+function log(t){logEl.textContent=new Date().toLocaleTimeString()+' — '+t;}
+function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+
+function speak(text){
+try{
+speechSynthesis.cancel();
+const u=new SpeechSynthesisUtterance(text);
+const lang=document.getElementById('langSelect').value;
+u.lang=lang;
+const vs=speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.toLowerCase().startsWith(lang.slice(0,2).toLowerCase()));
+const fem=vs.find(v=>/zira|samantha|jenny|aria|female|google us english|google uk english female|emma|olivia|hoda/i.test(v.name))||vs[0];
+if(fem){u.voice=fem;u.lang=fem.lang;}
+u.rate=0.95;u.pitch=1.2;
+speechSynthesis.speak(u);
+}catch(e){}
+}
+
+function update(){timerEl.textContent=fmt(left);
+const score=Math.max(0,100-distractions*10);
+scoreBadge.textContent='⭐ تركيز: '+score+'%';
+distractBadge.textContent='🚫 تشتيت: '+distractions;}
+
+function warnUser(){
+const now=Date.now();
+if(now-lastWarn<8000)return;
+lastWarn=now;distractions++;update();
+card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');
+const lang=document.getElementById('langSelect').value;
+if(lang.startsWith('ar'))speak('ارجع للتركيز. سيب الموبايل وكمل مهمتك');
+else speak('Stay focused. Come back to your task.');
+log('⚠️ تشتيت رقم '+distractions+' — ارجع ركز!');
+}
+
+document.addEventListener('visibilitychange',()=>{if(running&&document.hidden)warnUser();});
+window.addEventListener('blur',()=>{if(running)warnUser();});
+
+startBtn.onclick=async()=>{
+const t=document.getElementById('taskInput').value.trim()||'جلسة تركيز';
+taskName.textContent='📌 '+t;
+total=parseInt(document.getElementById('durSelect').value)*60;left=total;distractions=0;update();
+document.getElementById('setup').style.display='none';
+startBtn.style.display='none';exitBtn.style.display='inline-block';
+try{await document.documentElement.requestFullscreen();}catch(e){}
+running=true;
+const lang=document.getElementById('langSelect').value;
+speak(lang.startsWith('ar')?'بدأنا التركيز. بالتوفيق':'Focus session started. You got this.');
+log('▶ بدأت جلسة: '+t);
+tickId=setInterval(()=>{
+left--;update();
+if(left<=0)finish(true);
+},1000);
+};
+
+function finish(natural){
+clearInterval(tickId);running=false;
+try{if(document.fullscreenElement)document.exitFullscreen();}catch(e){}
+const lang=document.getElementById('langSelect').value;
+const score=Math.max(0,100-distractions*10);
+if(natural){
+speak(lang.startsWith('ar')?'عاش! خلصت جلسة التركيز بنجاح':'Amazing! You finished your focus session.');
+quoteEl.textContent=`🏆 خلصت! تركيزك ${score}% وتشتت ${distractions} مرة. عاش 💪`;
+}else{
+speak(lang.startsWith('ar')?'الجلسة خلصت':'Session ended.');
+quoteEl.textContent=`⏹ الجلسة خلصت. تركيزك ${score}% — كمل 👊`;
+}
+log('🏁 النهاية — تركيز '+score+'%');
+startBtn.style.display='inline-block';startBtn.textContent='🔁 جلسة جديدة';
+document.getElementById('setup').style.display='block';exitBtn.style.display='none';
+}
+exitBtn.onclick=()=>finish(false);
+fsBtn.onclick=async()=>{try{
+if(document.fullscreenElement)await document.exitFullscreen();
+else await document.documentElement.requestFullscreen();
+}catch(e){}};
+update();
+</script>
+</body>
+</html>
